@@ -5,75 +5,48 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use App\Services\UserService;
 use Illuminate\Http\JsonResponse;
 use App\Http\Resources\UserResource;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Requests\UserLoginRequest;
-use App\Http\Requests\UserRegisterRequest;
 use App\Http\Requests\UserUpdateRequest;
+use App\Http\Requests\UserRegisterRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Response;
 
 class UserController extends Controller
 {
-    public function register(UserRegisterRequest $request) : JsonResponse {
-        $data = $request->validated();
+    private UserService $userService;
 
-        $user = new User($data);
-        $user['password']= Hash::make($data['password']);
-        $user->save();
-
-        return (new UserResource($user))->response()->setStatusCode(201);
+    public function __construct(UserService $userService) {
+        $this->userService = $userService;
     }
 
-    public function login(UserLoginRequest $request) : UserResource {
-        $data = $request->validated();
-        $user = User::query()->where('username', '=', $data['username'])->first();
-
-        if (!$user || !Hash::check($data['password'], $user->password)) {
-            throw new HttpResponseException(response([
-                'errors' => [
-                    'messages' => [
-                        "username or password wrong"
-                    ]
-                ]
-            ], 401));
-        }
-
-        $user->token = Str::uuid()->tostring();
-        $user->save();
-
-        return new UserResource($user);
+    public function register(UserRegisterRequest $request): JsonResponse  {
+        $data = $this->userService->addUser($request);
+        return $data->response()->setStatusCode(201);
     }
 
-    public function get(Request $request): UserResource{
-        $user = Auth::user();
-        return new UserResource($user);
+    public function login(UserLoginRequest $request) : JsonResponse {
+        $data = $this->userService->login($request);        return $data->response()->setStatusCode(200);
     }
 
-    public function update(UserUpdateRequest $request): UserResource{
-        $data = $request->validated();
-        $user = Auth::user();
+    public function get(): JsonResponse{
+        $data = $this->userService->getUser();
+        return $data->response()->setStatusCode(200);
+    }
 
-        if(isset($data["name"])){
-            $user->name = $data["name"];
-        }
-
-        if(isset($data["password"])){
-            $user->password = Hash::make($data["password"]);
-        }
-        $user->save();
-
-        return new UserResource($user);
+    public function update(UserUpdateRequest $request): JsonResponse{
+        $data = $this->userService->updateUser($request);
+        return $data->response()->setStatusCode(200);
     }
 
     public function logout(): JsonResponse{
-        $user = Auth::user();
-        $user->token = null;
-        $user->save();
-
+        $data = $this->userService->logout();
         return response()->json([
-            "data" => true
+            "data" => $data
         ], 200);
     }
 }
